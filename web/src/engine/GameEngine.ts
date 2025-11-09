@@ -4,6 +4,8 @@
  */
 
 import type { GameState, GameMap, Player } from '../types/game';
+import { World, MovementSystem, ProductionSystem } from './ECS';
+import { Pathfinder } from './Pathfinding';
 
 export class GameEngine {
   private gameState: GameState;
@@ -11,6 +13,8 @@ export class GameEngine {
   private lastTickTime: number = 0;
   private tickInterval: number = 1000 / 30; // 30 ticks per second (like Widelands)
   private animationFrameId: number | null = null;
+  private ecsWorld: World;
+  private pathfinder: Pathfinder;
 
   constructor(map: GameMap, players: Player[]) {
     this.gameState = {
@@ -20,6 +24,14 @@ export class GameEngine {
       speed: 1.0,
       paused: false,
     };
+
+    // Initialize ECS World
+    this.ecsWorld = new World();
+    this.ecsWorld.addSystem(new MovementSystem());
+    this.ecsWorld.addSystem(new ProductionSystem());
+
+    // Initialize pathfinder
+    this.pathfinder = new Pathfinder(map);
   }
 
   /**
@@ -71,10 +83,14 @@ export class GameEngine {
   private tick(): void {
     this.gameState.currentTick++;
 
-    // Update all game objects
+    // Calculate delta time for ECS systems (in seconds)
+    const deltaTime = this.tickInterval / 1000;
+
+    // Update ECS systems
+    this.ecsWorld.update(deltaTime);
+
+    // Update game-specific logic
     this.updateEconomy();
-    this.updateWorkers();
-    this.updateBuildings();
     this.updateMilitary();
 
     // Notify listeners of state change
@@ -86,29 +102,9 @@ export class GameEngine {
    */
   private updateEconomy(): void {
     // TODO: Implement economy update logic
-    // - Calculate production
-    // - Route wares
+    // - Calculate ware demand/supply
+    // - Route wares between buildings
     // - Update supply chains
-  }
-
-  /**
-   * Update all workers (movement, tasks)
-   */
-  private updateWorkers(): void {
-    // TODO: Implement worker update logic
-    // - Move workers along paths
-    // - Execute tasks
-    // - Handle deliveries
-  }
-
-  /**
-   * Update all buildings (production, training)
-   */
-  private updateBuildings(): void {
-    // TODO: Implement building update logic
-    // - Process production
-    // - Train units
-    // - Consume resources
   }
 
   /**
@@ -155,5 +151,19 @@ export class GameEngine {
    */
   public togglePause(): void {
     this.gameState.paused = !this.gameState.paused;
+  }
+
+  /**
+   * Get ECS World (for entity management)
+   */
+  public getWorld(): World {
+    return this.ecsWorld;
+  }
+
+  /**
+   * Get pathfinder
+   */
+  public getPathfinder(): Pathfinder {
+    return this.pathfinder;
   }
 }

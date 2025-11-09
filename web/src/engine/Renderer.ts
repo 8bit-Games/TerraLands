@@ -6,6 +6,7 @@
 import * as PIXI from 'pixi.js';
 import type { GameMap, Field, CameraState } from '../types/game';
 import { TerrainType } from '../types/game';
+import { HexGrid } from '../utils/hexGrid';
 
 export class Renderer {
   private app: PIXI.Application;
@@ -113,40 +114,65 @@ export class Renderer {
     // Clear existing map
     this.mapContainer.removeChildren();
 
-    const tileSize = 32; // Pixels per tile
+    const hexSize = 24; // Radius of hex in pixels
     const { width, height } = map.dimensions;
 
-    // Render all fields
+    // Render all fields as hexagons
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const field = map.fields[y][x];
-        this.renderField(field, x, y, tileSize);
+        this.renderHexField(field, hexSize);
       }
     }
   }
 
   /**
-   * Render a single field (tile)
+   * Render a single hexagonal field
    */
-  private renderField(field: Field, x: number, y: number, tileSize: number): void {
+  private renderHexField(field: Field, hexSize: number): void {
     const graphics = new PIXI.Graphics();
+
+    // Convert hex coordinates to pixel position
+    const center = HexGrid.hexToPixel(field.coords, hexSize);
 
     // Get terrain color
     const color = this.terrainColors.get(field.terrain) || 0xFFFFFF;
 
-    // Draw hex tile as square for now (TODO: proper hex rendering)
-    graphics.rect(0, 0, tileSize - 1, tileSize - 1);
+    // Get hex corners
+    const corners = HexGrid.hexCorners(center, hexSize);
+
+    // Draw the hexagon
+    graphics.moveTo(corners[0].x, corners[0].y);
+    for (let i = 1; i < corners.length; i++) {
+      graphics.lineTo(corners[i].x, corners[i].y);
+    }
+    graphics.closePath();
     graphics.fill(color);
 
-    // Add height-based shading
+    // Add height-based shading for elevation
     if (field.height > 0) {
       const alpha = Math.min(0.3, field.height * 0.03);
-      graphics.rect(0, 0, tileSize - 1, tileSize - 1);
+      graphics.moveTo(corners[0].x, corners[0].y);
+      for (let i = 1; i < corners.length; i++) {
+        graphics.lineTo(corners[i].x, corners[i].y);
+      }
+      graphics.closePath();
       graphics.fill({ color: 0xFFFFFF, alpha });
     }
 
-    // Position the tile
-    graphics.position.set(x * tileSize, y * tileSize);
+    // Draw hex border
+    graphics.moveTo(corners[0].x, corners[0].y);
+    for (let i = 1; i < corners.length; i++) {
+      graphics.lineTo(corners[i].x, corners[i].y);
+    }
+    graphics.closePath();
+    graphics.stroke({ color: 0x000000, width: 0.5, alpha: 0.2 });
+
+    // Add resource indicator
+    if (field.resourceAmount > 0) {
+      graphics.circle(center.x, center.y, 3);
+      graphics.fill({ color: 0xFFD700, alpha: 0.8 });
+    }
 
     this.mapContainer.addChild(graphics);
   }

@@ -20,14 +20,18 @@ web/
 │   │   ├── GameCanvas.tsx
 │   │   └── GameUI.tsx
 │   ├── engine/          # Core game engine
-│   │   ├── GameEngine.ts    # Main game loop
-│   │   ├── Renderer.ts      # PixiJS renderer
-│   │   └── MapGenerator.ts  # Map generation
+│   │   ├── GameEngine.ts     # Main game loop + ECS integration
+│   │   ├── Renderer.ts       # PixiJS hex grid renderer
+│   │   ├── MapGenerator.ts   # Procedural map generation
+│   │   ├── Pathfinding.ts    # A* pathfinding for hex grids
+│   │   ├── ECS.ts            # Entity Component System
+│   │   └── AssetLoader.ts    # Asset loading and caching
 │   ├── game/            # Game logic
-│   │   └── gameStore.ts     # Zustand store
+│   │   └── gameStore.ts      # Zustand store
 │   ├── types/           # TypeScript definitions
 │   │   └── game.ts
 │   ├── utils/           # Utility functions
+│   │   └── hexGrid.ts        # Hexagonal grid utilities
 │   ├── assets/          # Game assets
 │   ├── App.tsx          # Main app component
 │   ├── main.tsx         # Entry point
@@ -88,26 +92,61 @@ npm run type-check
 npm run lint
 ```
 
-## Current Features (v0.1.0)
+## Current Features (v0.2.0)
 
-- ✅ Basic project setup with TypeScript + React + PixiJS
-- ✅ Game engine architecture with tick-based simulation
-- ✅ Procedural map generation
-- ✅ PixiJS rendering with camera controls (pan, zoom)
-- ✅ Touch-optimized UI framework
-- ✅ State management with Zustand
+### Core Engine
+- ✅ Game engine with 30 Hz tick-based simulation
+- ✅ Entity Component System (ECS) architecture
+- ✅ Movement and Production systems
+- ✅ Hexagonal grid system (flat-top orientation)
+- ✅ A* pathfinding algorithm for hex grids
+- ✅ Asset loading and caching system
+
+### Graphics & Rendering
+- ✅ PixiJS WebGL hexagonal grid rendering
+- ✅ Terrain rendering with proper hex tiles
+- ✅ Height-based shading for elevation
+- ✅ Resource indicators on tiles
+- ✅ Camera controls (pan, zoom, touch support)
+
+### Map System
+- ✅ Procedural terrain generation (64x64 tiles)
+- ✅ 6 terrain types (water, grass, desert, mountain, snow, swamp)
+- ✅ Resource placement (coal, iron, gold, granite)
+- ✅ Hex coordinate system utilities
+- ✅ Neighbor finding and distance calculations
+
+### Game Systems
+- ✅ Entity creation (workers, buildings)
+- ✅ Component-based entities (position, movement, inventory, etc.)
+- ✅ Pathfinding with terrain cost modifiers
+- ✅ Reachable hex calculation (for movement range)
+
+### UI & Controls
+- ✅ Touch-optimized game UI
+- ✅ Game speed controls (0.5x - 4x)
+- ✅ Pause/play functionality
 - ✅ Responsive design for mobile/desktop
+- ✅ Mouse and touch input support
+
+### Development
+- ✅ TypeScript with strict type checking
+- ✅ Vite fast build system
+- ✅ Code splitting for optimal loading
+- ✅ Development server with hot reload
 
 ## Roadmap
 
-### Phase 1: Core Engine (Current)
+### Phase 1: Core Engine (90% Complete)
 - [x] Project setup
 - [x] Basic rendering engine
 - [x] Map generation
-- [ ] Proper hex grid rendering
-- [ ] Asset loading system
-- [ ] Pathfinding (A*)
-- [ ] Entity system
+- [x] Proper hex grid rendering
+- [x] Asset loading system
+- [x] Pathfinding (A*)
+- [x] Entity Component System (ECS)
+- [ ] Sprite rendering for entities
+- [ ] Animation system
 
 ### Phase 2: Game Logic
 - [ ] Economy simulation
