@@ -4,20 +4,34 @@
  */
 
 import * as PIXI from 'pixi.js';
-import type { GameMap, Field, CameraState } from '../types/game';
+import type { GameMap, Field, CameraState, FieldCoords } from '../types/game';
 import { TerrainType } from '../types/game';
 import { HexGrid } from '../utils/hexGrid';
+import type { Entity } from './ECS';
+import { PositionComponent, SpriteComponent } from './ECS';
+
+export type HexClickCallback = (coords: FieldCoords) => void;
 
 export class Renderer {
   private app: PIXI.Application;
   private mapContainer: PIXI.Container;
+  private entitiesContainer: PIXI.Container;
+  private overlayContainer: PIXI.Container;
   private camera: CameraState;
   private terrainColors: Map<TerrainType, number>;
+  private hexSize: number = 24;
+  private currentMap: GameMap | null = null;
+  private entitySprites: Map<string, PIXI.Graphics> = new Map();
+  private selectedHex: FieldCoords | null = null;
+  private hexClickCallback: HexClickCallback | null = null;
 
   constructor(canvas: HTMLCanvasElement, width: number, height: number) {
     // Initialize PixiJS application
     this.app = new PIXI.Application();
     this.mapContainer = new PIXI.Container();
+    this.entitiesContainer = new PIXI.Container();
+    this.overlayContainer = new PIXI.Container();
+
     this.camera = {
       x: 0,
       y: 0,
@@ -52,14 +66,20 @@ export class Renderer {
       autoDensity: true,
     });
 
+    // Add containers in order (bottom to top)
     this.app.stage.addChild(this.mapContainer);
+    this.app.stage.addChild(this.entitiesContainer);
+    this.app.stage.addChild(this.overlayContainer);
 
-    // Enable interactivity
+    // Enable interactivity for map
     this.mapContainer.eventMode = 'static';
     this.mapContainer.hitArea = new PIXI.Rectangle(0, 0, width, height);
 
     // Set up camera controls
     this.setupCameraControls();
+
+    // Set up hex click detection
+    this.setupHexClickDetection();
   }
 
   /**
@@ -103,25 +123,79 @@ export class Renderer {
    * Update camera transform
    */
   private updateCameraTransform(): void {
+    // Apply camera to all containers
     this.mapContainer.position.set(-this.camera.x, -this.camera.y);
     this.mapContainer.scale.set(this.camera.zoom);
+
+    this.entitiesContainer.position.set(-this.camera.x, -this.camera.y);
+    this.entitiesContainer.scale.set(this.camera.zoom);
+
+    this.overlayContainer.position.set(-this.camera.x, -this.camera.y);
+    this.overlayContainer.scale.set(this.camera.zoom);
+  }
+
+  /**
+   * Set up hex click detection
+   */
+  private setupHexClickDetection(): void {
+    let dragStartPos = { x: 0, y: 0 };
+    let hasDragged = false;
+
+    this.mapContainer.on('pointerdown', (event) => {
+      dragStartPos = { x: event.globalX, y: event.globalY };
+      hasDragged = false;
+    });
+
+    this.mapContainer.on('pointermove', (event) => {
+      const dx = Math.abs(event.globalX - dragStartPos.x);
+      const dy = Math.abs(event.globalY - dragStartPos.y);
+      if (dx > 5 || dy > 5) {
+        hasDragged = true;
+      }
+    });
+
+    this.mapContainer.on('pointerup', (event) => {
+      // Only register as click if not dragging
+      if (!hasDragged && this.currentMap) {
+        const localPos = this.mapContainer.toLocal(event.global);
+        const hexCoords = HexGrid.pixelToHex(localPos, this.hexSize);
+
+        // Check if hex is within map bounds
+        const { col, row } = HexGrid.axialToOffset(hexCoords);
+        if (
+          row >= 0 &&
+          row < this.currentMap.dimensions.height &&
+          col >= 0 &&
+          col < this.currentMap.dimensions.width
+        ) {
+          this.selectedHex = hexCoords;
+          this.renderOverlay();
+
+          // Call callback if set
+          if (this.hexClickCallback) {
+            this.hexClickCallback(hexCoords);
+          }
+        }
+      }
+    });
   }
 
   /**
    * Render the game map
    */
   public renderMap(map: GameMap): void {
+    this.currentMap = map;
+
     // Clear existing map
     this.mapContainer.removeChildren();
 
-    const hexSize = 24; // Radius of hex in pixels
     const { width, height } = map.dimensions;
 
     // Render all fields as hexagons
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const field = map.fields[y][x];
-        this.renderHexField(field, hexSize);
+        this.renderHexField(field, this.hexSize);
       }
     }
   }
@@ -205,6 +279,137 @@ export class Renderer {
    */
   public resize(width: number, height: number): void {
     this.app.renderer.resize(width, height);
+  }
+
+  /**
+   * Render entities from ECS world
+   */
+  public renderEntities(entities: Entity[]): void {
+    // Clear existing entities
+    this.entitiesContainer.removeChildren();
+    this.entitySprites.clear();
+
+    for (const entity of entities) {
+      const position = entity.getComponent<PositionComponent>('position');
+      const sprite = entity.getComponent<SpriteComponent>('sprite');
+
+      if (!position || !sprite || !sprite.visible) {
+        continue;
+      }
+
+      // For now, render entities as colored circles
+      // TODO: Replace with actual sprites when asset loading is implemented
+      const graphics = this.renderEntityPlaceholder(position.coords, sprite.textureKey);
+      this.entitySprites.set(entity.id, graphics);
+      this.entitiesContainer.addChild(graphics);
+    }
+  }
+
+  /**
+   * Render entity placeholder (until sprites are loaded)
+   */
+  private renderEntityPlaceholder(coords: FieldCoords, type: string): PIXI.Graphics {
+    const graphics = new PIXI.Graphics();
+    const center = HexGrid.hexToPixel(coords, this.hexSize);
+
+    // Different colors for different entity types
+    let color = 0xFFFFFF;
+    let size = 8;
+
+    if (type.includes('worker')) {
+      color = 0x00FF00; // Green for workers
+      size = 6;
+    } else if (type.includes('building')) {
+      color = 0xFF0000; // Red for buildings
+      size = 12;
+    } else if (type.includes('soldier')) {
+      color = 0x0000FF; // Blue for soldiers
+      size = 6;
+    }
+
+    // Draw circle for entity
+    graphics.circle(center.x, center.y, size);
+    graphics.fill({ color, alpha: 0.8 });
+
+    // Draw border
+    graphics.circle(center.x, center.y, size);
+    graphics.stroke({ color: 0xFFFFFF, width: 1 });
+
+    return graphics;
+  }
+
+  /**
+   * Render overlay (selected hex, highlighted areas, etc.)
+   */
+  private renderOverlay(): void {
+    this.overlayContainer.removeChildren();
+
+    if (this.selectedHex) {
+      const graphics = new PIXI.Graphics();
+      const center = HexGrid.hexToPixel(this.selectedHex, this.hexSize);
+      const corners = HexGrid.hexCorners(center, this.hexSize);
+
+      // Draw selection highlight
+      graphics.moveTo(corners[0].x, corners[0].y);
+      for (let i = 1; i < corners.length; i++) {
+        graphics.lineTo(corners[i].x, corners[i].y);
+      }
+      graphics.closePath();
+      graphics.stroke({ color: 0xFFFF00, width: 2, alpha: 0.8 });
+
+      // Optional fill for selected hex
+      graphics.moveTo(corners[0].x, corners[0].y);
+      for (let i = 1; i < corners.length; i++) {
+        graphics.lineTo(corners[i].x, corners[i].y);
+      }
+      graphics.closePath();
+      graphics.fill({ color: 0xFFFF00, alpha: 0.1 });
+
+      this.overlayContainer.addChild(graphics);
+    }
+  }
+
+  /**
+   * Highlight multiple hexes (for movement range, etc.)
+   */
+  public highlightHexes(hexes: FieldCoords[], color: number = 0x00FF00): void {
+    const graphics = new PIXI.Graphics();
+
+    for (const hex of hexes) {
+      const center = HexGrid.hexToPixel(hex, this.hexSize);
+      const corners = HexGrid.hexCorners(center, this.hexSize);
+
+      graphics.moveTo(corners[0].x, corners[0].y);
+      for (let i = 1; i < corners.length; i++) {
+        graphics.lineTo(corners[i].x, corners[i].y);
+      }
+      graphics.closePath();
+      graphics.fill({ color, alpha: 0.2 });
+    }
+
+    this.overlayContainer.addChild(graphics);
+  }
+
+  /**
+   * Set hex click callback
+   */
+  public setHexClickCallback(callback: HexClickCallback): void {
+    this.hexClickCallback = callback;
+  }
+
+  /**
+   * Get selected hex
+   */
+  public getSelectedHex(): FieldCoords | null {
+    return this.selectedHex ? { ...this.selectedHex } : null;
+  }
+
+  /**
+   * Clear selection
+   */
+  public clearSelection(): void {
+    this.selectedHex = null;
+    this.renderOverlay();
   }
 
   /**
