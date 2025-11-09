@@ -1,0 +1,23 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        terra: {
+          green: '#2d5016',
+          brown: '#5c4033',
+          blue: '#1e3a5f',
+          gold: '#d4af37',
+        },
+      },
+      fontFamily: {
+        game: ['Arial', 'Helvetica', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}
